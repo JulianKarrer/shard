@@ -1,0 +1,28 @@
+WHITESPACE   =  _{ " " | "\t" | NEWLINE }
+program      =   { SOI ~ expr ~ EOI }
+  expr       =   { prefix? ~ primary ~ postfix* ~ (infix ~ prefix? ~ primary ~ postfix* )* }
+    infix    =  _{ add | sub | mul | div  }
+      add    =   { "+" } // Addition
+      sub    =   { "-" } // Subtraction
+      mul    =   { "*" } // Multiplication
+      div    =   { "/" } // Division
+    prefix   =  _{ neg }
+      neg    =   { "-" } // Negation
+    postfix  =  _{ "." ~ (x|y|z|w|sin|fract|length) }
+      // built in unaries
+      x       = {"x"}
+      y       = {"y"}
+      z       = {"z"}
+      w       = {"w"}
+      sin     = {"sin"}
+      fract   = {"fract"}
+      length  = {"length"}
+    primary  =  _{ num | uniform | "(" ~ expr ~ ")" }
+    num = { float | int }
+    float	= @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+}
+    int    =  @{ 
+      (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) 
+    }
+    uniform = {"uv"|"time"}
+
+// FUNCTION NAMES CANNOT CONTAIN DIGITS
