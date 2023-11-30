@@ -1,30 +1,15 @@
 use ast::Scope;
-use parse::{ShardParser, Rule, parse_scope};
-use pest::{Parser, iterators::Pair};
+use error::Error;
+use halfbrown::HashMap;
+use parse::{ShardParser, parse_scope, Rule};
+use pest::Parser;
+
+use crate::types::TypedAstNode;
 
 mod parse;
 mod ast;
-
-/// An enum representing all types of errors that may occur
-/// in the compilation process. All compile passes that may fail
-/// should return one of these kinds of errors as the error variant
-/// of a Result<>.
-pub enum Error{
-  ParseError(String),
-  TypeError(String),
-}
-
-impl Error{
-  /// Returns a ParseError, filling a predefined template with the expected
-  /// construct and properties of the construct found. These include its line
-  /// and column in the input, its text and the parser rule it matched against.
-  pub fn throw_parse(expected: &str, found:Pair<'_, Rule>)->Self{
-    Error::ParseError(format!(
-      "Expected {} at line {}, column {}. Instead found '{}', which is a '{:?}'", 
-      expected, found.line_col().0, found.line_col().1, found.as_str(), found.as_rule()
-    ))
-  }
-}
+mod types;
+mod error;
 
 // precision highp float;
 // uniform vec2 iResolution;
@@ -48,7 +33,10 @@ fn main(){
   if let Ok(ast) = compile("
   k:= 1
   🤩:= 5
-  uv.x * k + 🤩"){
-    println!("{:#?}", ast)
+  uv.x.sin * k + 🤩"){
+    println!("{:#?}", ast);
+    println!("TYPED: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    let typed = TypedAstNode::from_ast(ast::AstNode::Scope(ast), &mut HashMap::new()).unwrap();
+    println!("{:#?}", typed);
   };
 }

@@ -1,16 +1,19 @@
+use crate::ast::{Number, Identifier};
 use crate::{ast, Error};
 use ast::{Expression, Uniform, PostfixUnaryOperator, PrefixUnaryOperator, InfixBinaryOperator, Scope};
 use ast::Assignment;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
+use lazy_static::lazy_static;
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~ DEFINE A PRATT PARSER WITH PRECEDENCES ~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(pest_derive::Parser)]
 #[grammar = "shard.pest"]
 pub struct ShardParser;
 
-lazy_static::lazy_static!(
-  /// A pratt parser for creating an abstract syntax tree (AST) from an expression token.
+lazy_static!(
+  /// A pest.rs pratt parser for creating an abstract syntax tree (AST) from an expression token.
   static ref PRATT_PARSER: PrattParser<Rule> = {
     use pest::pratt_parser::{Assoc::*, Op};
     use Rule::*;
@@ -26,6 +29,8 @@ lazy_static::lazy_static!(
   };
 );
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE EXPRESSIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 /// Parse an expression token, yielding an AST Node representing an expression
 /// with no type information provided.
 pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
@@ -34,9 +39,9 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
   .map_primary(|primary| match primary.as_rule() {
     Rule::num =>
       Ok(Expression::Number({
-        let parsed = primary.as_str().parse::<f64>();
-        match parsed{
-          Ok(num) => Ok(num),
+        let parsed_value = primary.as_str().parse::<f64>();
+        match parsed_value{
+          Ok(num) => Ok(Number{ value: num }),
           Err(_) => Err(Error::throw_parse("number", primary))
         }
       }?)), 
@@ -49,7 +54,7 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
         }?
       ))
     }, 
-    Rule::ident => Ok(Expression::Identifier(primary.as_str().to_owned())),
+    Rule::ident => Ok(Expression::Identifier(Identifier{ name: primary.as_str().to_owned() })),
     _ => Err(Error::throw_parse("atom", primary))
   })
   // postfix operators
@@ -92,6 +97,9 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
   .parse(pairs)
 }
 
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE SCOPES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 /// Parse a scope token, yielding an AST Node representing any number of
 /// assignments followed by an expression with no type information provided to either.
 pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, Error> {
@@ -121,6 +129,9 @@ pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, Error> {
       _ => return Err(Error::throw_parse("an assignment or expression", pair))
     }
   }
-  Ok(Scope{ assign: assignments, expr: expression.ok_or(Error::ParseError("Expected at least one expression in scope".to_owned()))?})
+  Ok(Scope{ 
+    assign: assignments,
+    expr: expression.ok_or(Error::ParseError("Expected at least one expression in scope".to_owned()))?
+  })
 }
 
