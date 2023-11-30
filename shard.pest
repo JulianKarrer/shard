@@ -1,5 +1,15 @@
-WHITESPACE   =  _{ " " | "\t" | NEWLINE }
-program      =   { SOI ~ expr ~ EOI }
+WHITESPACE   =  _{ " " | "\t" }
+program      =   { SOI ~ scope ~ EOI }
+  // utf-8 identifiers
+  utfsym     =  _{ LETTER | SYMBOL }
+  utfnum     =  _{ LETTER | SYMBOL }
+  ident      =  @{ utfsym ~ (utfnum | utfsym)* }
+  // assignments
+  assign     =  { ident ~ ":=" ~ expr }
+  // scopes
+  nl         = _{NEWLINE}
+  scope      =  { nl*~ (assign ~ nl)* ~ expr ~ nl*}
+  // expressions
   expr       =   { prefix? ~ primary ~ postfix* ~ (infix ~ prefix? ~ primary ~ postfix* )* }
     infix    =  _{ add | sub | mul | div  }
       add    =   { "+" } // Addition
@@ -10,19 +20,19 @@ program      =   { SOI ~ expr ~ EOI }
       neg    =   { "-" } // Negation
     postfix  =  _{ "." ~ (x|y|z|w|sin|fract|length) }
       // built in unaries
-      x       = {"x"}
-      y       = {"y"}
-      z       = {"z"}
-      w       = {"w"}
-      sin     = {"sin"}
-      fract   = {"fract"}
-      length  = {"length"}
-    primary  =  _{ num | uniform | "(" ~ expr ~ ")" }
+      x       = { "x" }
+      y       = { "y" }
+      z       = { "z" }
+      w       = { "w" }
+      sin     = { "sin" }
+      fract   = { "fract" }
+      length  = { "length" }
+    primary  =  _{ num | uniform | ident | "(" ~ expr ~ ")" }
     num = { float | int }
     float	= @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+}
     int    =  @{ 
       (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) 
     }
-    uniform = {"uv"|"time"}
+    uniform = { "uv" | "time" }
 
 // FUNCTION NAMES CANNOT CONTAIN DIGITS
