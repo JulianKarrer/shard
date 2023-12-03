@@ -8,8 +8,8 @@ A purely functional programming language for writing fragment shaders and creati
 
 Shard transpiles to GLSL and is compatible with online platforms for shader art such as [Shadertoy](https://www.shadertoy.com/) and [GLSL Sandbox](https://glslsandbox.com/), but aims to provide cleaner syntax and convenient functions to make life easier.
 
-Fragment shaders are functions that maps a position on the screen, current timestamp and other attributes to an output colour with no other side effects. This problem obviously lends itself to a purely functional programming language with no side effects.
+Fragment shaders are functions that maps a position on the screen, current timestamp and other attributes to an output colour with no other side effects. This problem naturally lends itself to a purely functional programming language with no side effects.
 
-Shard does not aim to be a general purpose language and is not Turing complete, but rather *helpfully* restrictive for the given problem: all valid Shard programs are guaranteed to terminate and produce the expected type.
+Shard does not aim to be a general purpose language and is not Turing complete, but rather *helpfully* restrictive for the given problem: all valid Shard programs are guaranteed to terminate and produce the expected output type.
 
 Shard is currently in early development and many of the features invisioned are not a reality *yet*. Contact me for any information: jk@studioerika.de

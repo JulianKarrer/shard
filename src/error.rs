@@ -1,5 +1,5 @@
 use pest::iterators::Pair;
-use crate::parse::Rule;
+use crate::{parse::Rule, ast::AstProperties};
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ DEFINE CUSTOM ERROR ENUMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -32,7 +32,12 @@ impl Error{
 
   /// Returns a TypeError, filling a predefined template with the content that has a
   /// conflicting type
-  pub fn throw_type_conflict(content: &str)->Self{
-    Error::TypeError(format!("Type of '{}' is unexpected.", content))
+  pub fn throw_type_conflict(content: &AstProperties)->Self{
+    Error::TypeError(format!(
+      "Type of '{}' at line {}, colum {} is unexpected.", 
+      content.source, 
+      content.source_start.0, 
+      content.source_start.1
+    ))
   }
 }

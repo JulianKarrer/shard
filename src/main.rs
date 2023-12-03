@@ -1,10 +1,9 @@
 use ast::Scope;
 use error::Error;
-use halfbrown::HashMap;
 use parse::{ShardParser, parse_scope, Rule};
 use pest::Parser;
 
-use crate::types::TypedAstNode;
+use crate::types::InfersType;
 
 mod parse;
 mod ast;
@@ -30,13 +29,13 @@ fn compile(source: &str) -> Result<Scope, Error> {
 }
 
 fn main(){
-  if let Ok(ast) = compile("
+  if let Ok(mut ast) = compile("
   k:= 1
-  🤩:= 5
-  uv.x.sin * k + 🤩"){
+  🤩:= uv
+  uv.y.sin * k + 🤩.y"){
     println!("{:#?}", ast);
     println!("TYPED: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-    let typed = TypedAstNode::from_ast(ast::AstNode::Scope(ast), &mut HashMap::new()).unwrap();
-    println!("{:#?}", typed);
+    ast.set_own_type(&mut vec![]).unwrap();
+    println!("{:#?}", ast);
   };
 }

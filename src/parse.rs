@@ -1,4 +1,4 @@
-use crate::ast::{Number, Identifier};
+use crate::ast::{Number, Identifier, AstProperties};
 use crate::{ast, Error};
 use ast::{Expression, Uniform, PostfixUnaryOperator, PrefixUnaryOperator, InfixBinaryOperator, Scope};
 use ast::Assignment;
@@ -36,30 +36,36 @@ lazy_static!(
 pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
   PRATT_PARSER
   // primaries
-  .map_primary(|primary| match primary.as_rule() {
+  .map_primary(|primary| 
+    match primary.as_rule() {
     Rule::num =>
       Ok(Expression::Number({
         let parsed_value = primary.as_str().parse::<f64>();
         match parsed_value{
-          Ok(num) => Ok(Number{ value: num }),
+          Ok(num) => Ok(Number{ value: num, properties: AstProperties::new(&primary) }),
           Err(_) => Err(Error::throw_parse("number", primary))
         }
       }?)), 
     Rule::uniform => {
       Ok(Expression::Uniform(
         match primary.as_str(){
-          "uv" => Ok(Uniform::UV),
-          "time" => Ok(Uniform::Time),
+          "uv" => Ok(Uniform::UV(AstProperties::new(&primary))),
+          "time" => Ok(Uniform::Time(AstProperties::new(&primary))),
           _ => Err(Error::throw_parse("uniform", primary))
         }?
       ))
     }, 
-    Rule::ident => Ok(Expression::Identifier(Identifier{ name: primary.as_str().to_owned() })),
+    Rule::ident => Ok(Expression::Identifier(Identifier{ 
+      name: primary.as_str().to_owned(), 
+      properties: AstProperties::new(&primary),
+      redefined: None 
+    })),
     _ => Err(Error::throw_parse("atom", primary))
   })
   // postfix operators
   .map_postfix(|lhs, op|{
-    let op = match op.as_rule() {
+    let properties = AstProperties::new(&op);
+    let operator = match op.as_rule() {
       Rule::x => Ok(PostfixUnaryOperator::ProjectX),
       Rule::y => Ok(PostfixUnaryOperator::ProjectY),
       Rule::z => Ok(PostfixUnaryOperator::ProjectZ),
@@ -69,19 +75,21 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
       Rule::length => Ok(PostfixUnaryOperator::Length),
       _ => Err(Error::throw_parse("unary postfix operator", op))
     };
-    Ok(Expression::PostUnaryOp { op: op?, val: Box::new(lhs?) } )
+    Ok(Expression::PostUnaryOp { op: operator?, val: Box::new(lhs?), properties } )
   })
   // prefix operators
   .map_prefix(|op, rhs| match op.as_rule(){
     Rule::neg => Ok(Expression::PreUnaryOp { 
       op: PrefixUnaryOperator::Negate, 
-      val: Box::new(rhs?)
+      val: Box::new(rhs?),
+      properties: AstProperties::new(&op)
     }),
     _ => Err(Error::throw_parse("unary prefix operator", op)),
   })
   // infix operators
   .map_infix(|lhs, op, rhs| {
-    let op = match op.as_rule() {
+    let properties = AstProperties::new(&op);
+    let operator = match op.as_rule() {
         Rule::add => Ok(InfixBinaryOperator::Add),
         Rule::sub => Ok(InfixBinaryOperator::Subtract),
         Rule::mul => Ok(InfixBinaryOperator::Multiply),
@@ -90,8 +98,9 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
     };
     Ok(Expression::InfixBinaryOp {
       lhs: Box::new(lhs?),
-      op: op?,
+      op: operator?,
       rhs: Box::new(rhs?),
+      properties
     })
   })
   .parse(pairs)
@@ -105,9 +114,11 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, Error> {
 pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, Error> {
   let mut assignments:Vec<Assignment> = vec![];
   let mut expression: Option<Box<Expression>> = None;
+  let properties =  AstProperties::new_from_pairs(&pairs);
   for pair in pairs{
     match pair.as_rule(){
       Rule::assign => {
+        let properties = AstProperties::new(&pair);
         let mut inner = pair.clone().into_inner();
         let ident = inner.next().ok_or(
           Error::throw_parse("identifier on left side of the assignment", pair.clone())
@@ -115,7 +126,7 @@ pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, Error> {
         let val = parse_expr(inner.next().ok_or(
           Error::throw_parse("identifier on right side of the assignment", pair)
           )?.into_inner());
-        assignments.push(Assignment { ident, val: Box::new(val?) })
+        assignments.push(Assignment { ident, val: Box::new(val?), properties})
       },
       Rule::expr => {
         if expression.is_some() {
@@ -131,7 +142,8 @@ pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, Error> {
   }
   Ok(Scope{ 
     assign: assignments,
-    expr: expression.ok_or(Error::ParseError("Expected at least one expression in scope".to_owned()))?
+    expr: expression.ok_or(Error::ParseError("Expected at least one expression in scope".to_owned()))?,
+    properties
   })
 }
 
