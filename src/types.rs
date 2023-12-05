@@ -1,12 +1,11 @@
-use enum_map::Enum;
-use crate::{ast::{Uniform, PrefixUnaryOperator, InfixBinaryOperator, PostfixUnaryOperator, Number, Identifier, Expression, Assignment, Scope}, Error};
+use crate::{ast::{Uniform, PrefixUnaryOperator, InfixBinaryOperator, PostfixUnaryOperator, Number, Identifier, Expression, Assignment, Scope}, CompileError};
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ WHAT IS A TYPE? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /// The dimensionality of the *Number* type. This is also
 /// used to specify the return type of functions since functions
 /// returning other functions are not allowed.
-#[derive(Enum, Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub enum Dimension{
   // dimensionality must be defined in ascending order top to bottom
   // so that derive(PartialOrd) can work correctly
@@ -45,19 +44,19 @@ pub enum Type{
 /// 
 /// Given the types of the input arguments, the node must yield a unique output type,
 /// which may not be a function.
-pub trait InfersType{
+trait InfersType{
   /// Infer the type of `self` based on information available or
   /// recursive function calls to `infer_own_types` on child nodes of the AST.
   /// 
   /// This function sets the type for a node, replacing the `None` in `Option<Type>` 
   /// with `Some(Type:: ...)`, returning the type set or propagating errors.
-  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, Error>;
+  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, CompileError>;
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ATOMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 impl InfersType for Uniform{
-  fn set_own_type(&mut self, _idents: &mut Vec<(String, Type)>)->Result<Type, Error> {
+  fn set_own_type(&mut self, _idents: &mut Vec<(String, Type)>)->Result<Type, CompileError> {
     // get own type
     let own_type = match self{
       Uniform::UV(_) => { Type::Number(Dimension::Two) },
@@ -74,15 +73,15 @@ impl InfersType for Uniform{
 }
 
 impl InfersType for Number{
-  fn set_own_type(&mut self, _idents: &mut Vec<(String, Type)>)->Result<Type, Error> {
+  fn set_own_type(&mut self, _idents: &mut Vec<(String, Type)>)->Result<Type, CompileError> {
     self.properties.own_type = Some(Type::Number(Dimension::One));
     Ok(Type::Number(Dimension::One))
   }
 }
 
 impl InfersType for Identifier{
-  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, Error> {
-    let error =  Error::throw_type_undefined(&self.name);
+  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, CompileError> {
+    let error =  CompileError::throw_type_undefined(&self.name);
     let own_types:Vec<&Type> = idents.iter()
       .filter(|(name,_)| *name==self.name )
       .map(|(_, owntype)| owntype)
@@ -97,7 +96,7 @@ impl InfersType for Identifier{
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPRESSIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 impl InfersType for Expression{
-  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, Error> {
+  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, CompileError> {
     match self {
       Expression::Identifier(ident) => ident.set_own_type(idents),
       Expression::Uniform(unif) => unif.set_own_type(idents),
@@ -113,7 +112,7 @@ impl InfersType for Expression{
       },
       Expression::PostUnaryOp { op, val, properties } => {
         let operand = val.set_own_type(idents)?;
-        let error = Error::throw_type_conflict(properties);
+        let error = CompileError::throw_type_conflict(properties);
         match op {
           // projection operators always return a one-dimensional number
           // their arguments must have at least n dimensions for the nth operator
@@ -189,7 +188,7 @@ impl InfersType for Expression{
       Expression::InfixBinaryOp { lhs, op, rhs, properties } => {
         let lhs = lhs.set_own_type(idents)?;
         let rhs = rhs.set_own_type(idents)?;
-        let error = Error::throw_type_conflict(properties);
+        let error = CompileError::throw_type_conflict(properties);
         match op{
           // addition and subtraction require two numbers of equal dimensionality to work
           InfixBinaryOperator::Add => {
@@ -264,7 +263,7 @@ impl InfersType for Expression{
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ASSIGNMENTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 impl InfersType for Assignment{
-  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, Error> {
+  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, CompileError> {
     let expr_type = self.val.set_own_type(idents)?;
     self.properties.own_type = Some(expr_type.clone());
     // add the type of the identifier inferred from the expression to the
@@ -277,7 +276,7 @@ impl InfersType for Assignment{
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ SCOPES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 impl InfersType for Scope {
-  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, Error> {
+  fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, CompileError> {
     for assign in &mut self.assign{
       assign.set_own_type(idents)?;
     }
@@ -285,4 +284,41 @@ impl InfersType for Scope {
     self.properties.own_type = Some(expr_type.clone());
     Ok(expr_type)
   }
+}
+
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ FUNCTIONS FOR CONVENIENCE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+impl Expression{
+  /// Returns a reference to the Type of the expression.
+  /// This is wrapper for convenience that abstacts away the specifics
+  /// of accessing the AstProperties field in each of the Expression variants.
+  pub fn get_own_type(&self)->&Option<Type>{
+    match self{
+      Expression::Identifier(ident) => {&ident.properties.own_type},
+      Expression::Uniform(unif) => {match unif {
+        Uniform::UV(prop) => &prop.own_type,
+        Uniform::Time(prop) => &prop.own_type,
+      }},
+      Expression::Number(num) => &num.properties.own_type,
+      Expression::PreUnaryOp { op: _, val: _, properties } => {
+        &properties.own_type
+      },
+      Expression::PostUnaryOp { op: _, val: _, properties } => {
+        &properties.own_type
+      },
+      Expression::InfixBinaryOp { lhs: _, op: _, rhs: _, properties } => {
+        &properties.own_type
+      },
+  }
+  }
+}
+
+/// Infer the types of every node in the AST, check if they match up with operator
+/// and function definitions and label every node in the AST with its type.
+/// 
+/// This replaces all `None` variants with `Some(Type)` in every `AstProperties` struct
+/// of the AST.
+pub fn set_types(scope: &mut Scope)->Result<Type, CompileError>{
+  scope.set_own_type(&mut vec![])
 }
