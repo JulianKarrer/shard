@@ -1,4 +1,4 @@
-use crate::{ast::{Uniform, PrefixUnaryOperator, InfixBinaryOperator, PostfixUnaryOperator, Number, Identifier, Expression, Assignment, Scope}, CompileError};
+use crate::{ast::{Uniform, PrefixUnaryOperator, InfixBinaryOperator, PostfixUnaryOperator, Number, Identifier, Expression, Assignment, Function, Program}, CompileError};
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ WHAT IS A TYPE? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -34,6 +34,18 @@ pub enum Type{
   Function{
     args: Vec<Type>,
     returns: Dimension
+  }
+}
+
+pub fn dimension_from_str(to_parse: &str)->Result<Dimension, CompileError>{
+  match to_parse{
+    "1" => Ok(Dimension::One),
+    "2" => Ok(Dimension::Two),
+    "3" => Ok(Dimension::Three),
+    "4" => Ok(Dimension::Four),
+    _ => Err(
+      CompileError::Parse(format!("Error parsing number type, found: '{}'", to_parse))
+    )
   }
 }
 
@@ -275,14 +287,29 @@ impl InfersType for Assignment{
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ SCOPES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-impl InfersType for Scope {
+impl InfersType for Function {
   fn set_own_type(&mut self, idents: &mut Vec<(String, Type)>)->Result<Type, CompileError> {
+    // add the arguments of the funtion to the list of defined, useable identifiers
+    idents.append(&mut self.get_args_clone()?);
+
+    // set types for all assignments in the function body, updating the list of defined
+    // identifiers along the way
     for assign in &mut self.assign{
       assign.set_own_type(idents)?;
     }
+    // finally, the expression in the function body can be evaluated
     let expr_type = self.expr.set_own_type(idents)?;
-    self.properties.own_type = Some(expr_type.clone());
-    Ok(expr_type)
+
+    // check if the type of the expression matches the function signature
+    let mut passes_check = false;
+    if let Some(Type::Function { args: _, returns }) = &self.properties.own_type{
+      if let Type::Number(dim) = expr_type{
+        if dim == *returns{ passes_check = true;}
+      }
+    }
+
+    if passes_check {Ok(expr_type)} 
+    else {Err(CompileError::throw_fn_signature_mismatch(self))}
   }
 }
 
@@ -319,6 +346,9 @@ impl Expression{
 /// 
 /// This replaces all `None` variants with `Some(Type)` in every `AstProperties` struct
 /// of the AST.
-pub fn set_types(scope: &mut Scope)->Result<Type, CompileError>{
-  scope.set_own_type(&mut vec![])
+pub fn set_types(program: &mut Program)->Result<(), CompileError>{
+  for function in &mut program.functions{
+    function.set_own_type(&mut vec![])?;
+  }
+  Ok(())
 }

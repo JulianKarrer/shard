@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use deunicode::deunicode;
 
-use crate::{ast::Expression, error::CompileError, ast::{Uniform, PrefixUnaryOperator, PostfixUnaryOperator, InfixBinaryOperator, Scope}, types::{Type, Dimension}};
+use crate::{ast::Expression, error::CompileError, ast::{Uniform, PrefixUnaryOperator, PostfixUnaryOperator, InfixBinaryOperator, Function, Program}, types::{Type, Dimension}};
 
 
 pub trait Glslify{
@@ -76,13 +76,24 @@ impl Glslify for Type{
       },
       Type::Function { args: _, returns: _ } => {
         Err(CompileError::Glslify(
-          "Compiling Function Types to GLSL is currently unsupported.".to_owned()
+          "Can't compile type 'Function' to GLSL using only type information. 
+The function struct containing the arguments' identifiers is required.".to_owned()
         ))
       },
     }
   }
 }
 
+impl Glslify for Dimension{
+  fn to_glsl(&self)->Result<String, CompileError> {
+    match self {
+      Dimension::One => Ok("float".to_string()),
+      Dimension::Two => Ok("vec2".to_string()),
+      Dimension::Three => Ok("vec3".to_string()),
+      Dimension::Four => Ok("vec4".to_string()),
+    }
+  }
+}
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OTHERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -94,9 +105,28 @@ pub fn identifier_utf8_to_ascii(ident: &str)->String{
   deunicode(ident).replace(' ', "_")
 }
 
-impl Glslify for Scope {
+impl Glslify for Function {
   fn to_glsl(&self)->Result<String, CompileError> {
     let mut result = String::new();
+    // add the function signature
+     if let Some(Type::Function { args: _, returns }) = &self.properties.own_type{
+      result.push_str(&format!("{} {}({}){{",
+        // exception: the function with identifier 'main' is the only function with a void return type
+        if self.ident=="main"{ "void".to_owned() }else{ returns.to_glsl()? },
+        self.ident,
+        {
+          // join together format strings for each argument identifier and GLSL type
+          let mut arguments_glsl:Vec<String> = vec![];
+          for (arg_name, arg_type) in self.get_args_clone()?{
+            arguments_glsl.push(format!("in {} {}", arg_type.to_glsl()?, arg_name))
+          }
+          arguments_glsl.join(",")
+        }
+      ));
+    } else {
+      return Err(CompileError::throw_glslify_error(&self.properties));
+    };
+
     let mut defined_identifiers = HashSet::with_capacity(self.assign.len());
     for assign in &self.assign{
       // when previously defined identifiers are overwritten, the type in front of the
@@ -119,7 +149,36 @@ impl Glslify for Scope {
         ));
       }
     }
-    result.push_str(&format!("return {}",self.expr.to_glsl()?));
+    // exception: the function with identifier 'main' is the only function that assigns to 
+    // gl_FragColor instead of returning a value
+    result.push_str( 
+      &if self.ident=="main"{ 
+        format!("gl_FragColor = {};}}",self.expr.to_glsl()?)
+      } else{ 
+        format!("return {};}}",self.expr.to_glsl()?)
+      }
+    );
+
+    Ok(result)
+  }
+}
+
+impl Glslify for Program{
+  fn to_glsl(&self)->Result<String, CompileError> {
+    // add the head of the glsl file
+    let mut result = String::from("
+precision highp float; 
+uniform vec2 resolution; 
+uniform float time;
+#define uv 2.0*gl_FragCoord.xy/resolution.xy-1.0
+");
+    // add the main body, containing function definitions
+    let mut function_strigs = vec![];
+    for function in &self.functions{
+      function_strigs.push(function.to_glsl()?)
+    }
+    result.push_str(&function_strigs.join("\n"));
+
     Ok(result)
   }
 }

@@ -1,7 +1,5 @@
-use ast::Scope;
 use error::CompileError;
-use parse::{ShardParser, parse_scope, Rule};
-use pest::Parser;
+use parse::parse_program;
 
 use crate::{types::set_types, glslify::Glslify};
 
@@ -11,33 +9,28 @@ mod types;
 mod error;
 mod glslify;
 
-// precision highp float;
-// uniform vec2 iResolution;
-// uniform float iTime;
-
-// void main() {
-//   gl_FragColor = vec4(1.0)
-// }
-
-
-fn compile(source: &str) -> Result<Scope, CompileError> {
-  match ShardParser::parse(Rule::scope, source) {
-    Ok(mut pairs) => {
-      Ok(parse_scope(pairs.next().ok_or(CompileError::Parse("No scope found".to_owned()))?.into_inner())?)
-    }
-    Err(e) => {Err(CompileError::Parse(e.to_string()))}
-  }
+pub fn compile(source: &str)->Result<String, CompileError>{
+  let mut program =  parse_program(source)?;
+  set_types(&mut program)?;
+  println!("{:#?}", program);
+  program.to_glsl()
 }
 
-fn main(){
-  if let Ok(mut ast) = compile("
+const SOURCE: &str = "
+
+fn sdf(pos:3, eps:1)->1
+  pos.length - eps
+
+
+fn main()->1
   k:= 1
   🤩:= uv
-  uv.y.sin * k + 🤩.y"){
-    set_types(&mut ast).unwrap();
-    println!("AST: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-    println!("{:#?}", ast);
-    println!("CODE: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-    println!("{}", ast.to_glsl().unwrap());
-  };
+  uv.y.sin * k + 🤩.y
+";
+
+fn main(){
+  match compile(SOURCE){
+    Ok(glsl) => {println!("{}", glsl)},
+    Err(err) => println!("{:#?}", err),
+  } 
 }

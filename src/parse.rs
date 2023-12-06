@@ -1,7 +1,10 @@
-use crate::ast::{Number, Identifier, AstProperties};
+use crate::ast::{Number, Identifier, AstProperties, Program};
+use crate::glslify::identifier_utf8_to_ascii;
+use crate::types::{dimension_from_str, Type};
 use crate::{ast, CompileError};
-use ast::{Expression, Uniform, PostfixUnaryOperator, PrefixUnaryOperator, InfixBinaryOperator, Scope};
+use ast::{Expression, Uniform, PostfixUnaryOperator, PrefixUnaryOperator, InfixBinaryOperator, Function};
 use ast::Assignment;
+use pest::Parser;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
 use lazy_static::lazy_static;
@@ -106,15 +109,64 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
 }
 
 
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE SCOPES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-/// Parse a scope token, yielding an AST Node representing any number of
+/// Parse a function token, yielding an AST Node representing any number of
 /// assignments followed by an expression with no type information provided to either.
-pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, CompileError> {
+fn parse_function(mut pairs: Pairs<Rule>) -> Result<Function, CompileError> {
+  let error = CompileError::Parse(
+    "Internal error parsing function.".to_owned());
+  let source = pairs.as_str().to_owned();
+  let source_start = pairs.peek().ok_or(error.clone())?.line_col();
+
+  // parse the function signature
+  let signature = pairs.next().ok_or(error.clone())?.into_inner();
+  let mut function_name = None;
+  let mut function_returns = None;
+  let mut arg_types = vec![];
+  let mut arg_identifiers = vec![];
+  for pair in signature{
+    // function signatures contain an identifier, a return numtype and multiple optional
+    // args
+    match pair.as_rule(){
+      Rule::ident => {
+        function_name = Some(identifier_utf8_to_ascii(pair.as_str()));
+      }
+      Rule::numtype => {
+        function_returns = Some(dimension_from_str(pair.as_str())?)
+      }
+      Rule::arg => {
+        let mut arg = pair.into_inner();
+        // parse the argument identifier
+        let arg_ident = arg.next().ok_or(error.clone())?;
+        if arg_ident.as_rule() == Rule::ident {
+          arg_identifiers.push(identifier_utf8_to_ascii(arg_ident.as_str()).to_owned());
+        } else {return Err(error.clone())}
+        // parse the argument type
+        let arg_type = arg.next().ok_or(error.clone())?;
+        if arg_type.as_rule() == Rule::numtype {
+          arg_types.push(Type::Number(dimension_from_str(arg_type.as_str())?));
+        } else {return Err(error.clone())}
+      }
+      _ => {return Err(error.clone())}
+    }
+  }
+
+  // fill in the type of the function
+  let scope = pairs.next().ok_or(error.clone())?.into_inner();
+  let properties =  AstProperties{ 
+    own_type: Some(Type::Function { 
+      args: arg_types, 
+      returns: function_returns.ok_or(error.clone())?
+    }), 
+    source_start, 
+    source,
+  };
+
+  // parse the function body, or scope
   let mut assignments:Vec<Assignment> = vec![];
   let mut expression: Option<Box<Expression>> = None;
-  let properties =  AstProperties::new_from_pairs(&pairs);
-  for pair in pairs{
+  for pair in scope{
     match pair.as_rule(){
       Rule::assign => {
         let properties = AstProperties::new(&pair);
@@ -131,7 +183,9 @@ pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, CompileError> {
         if expression.is_some() {
           // if more than one expression that is not part of an assignment is found in a scope, 
           // throw a parse error.
-          return Err(CompileError::throw_parse("only one expression", pair))
+          return Err(
+            CompileError::throw_parse("only one expression per function body", pair)
+          )
         } else {
           expression = Some(Box::new(parse_expr(pair.into_inner())?))
         }
@@ -139,10 +193,36 @@ pub fn parse_scope(pairs: Pairs<Rule>) -> Result<Scope, CompileError> {
       _ => return Err(CompileError::throw_parse("an assignment or expression", pair))
     }
   }
-  Ok(Scope{ 
+  Ok(Function{ 
     assign: assignments,
-    expr: expression.ok_or(CompileError::Parse("Expected at least one expression in scope".to_owned()))?,
-    properties
+    expr: expression.ok_or(
+      CompileError::Parse("Expected at least one expression in scope".to_owned()))?,
+    properties,
+    ident: function_name.ok_or(error.clone())?,
+    arg_identifiers,
   })
 }
 
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE THE PROGRAM ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+pub fn parse_program(source: &str) -> Result<Program, CompileError>{
+  match ShardParser::parse(Rule::program, source) {
+    Ok(mut pairs) => {
+      // unwrap the main program token
+      let program = pairs.next()
+        .ok_or(CompileError::Parse("Could not locate a function".to_owned()))?
+        .into_inner();
+      
+      // parse each function in the program
+      let mut functions = vec![];
+      for pair in program{
+        if let Rule::function = pair.as_rule(){
+          functions.push(parse_function(pair.into_inner())?);
+        }
+      }
+      Ok( Program { functions })
+    }
+    Err(e) => {Err(CompileError::Parse(e.to_string()))}
+  }
+}

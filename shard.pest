@@ -1,13 +1,17 @@
 WHITESPACE   =  _{ " " | "\t" }
-program      =   { SOI ~ scope ~ EOI }
+program      =   { SOI ~ (nl* ~ function ~nl*)+ ~ EOI }
   // utf-8 identifiers
   utfsym     =  _{ LETTER | SYMBOL }
   utfnum     =  _{ LETTER | SYMBOL }
   ident      =  @{ utfsym ~ (utfnum | utfsym)* }
   // assignments
-  assign     =  { ident ~ ":=" ~ expr }
-  // scopes
+  assign     =  { ident ~ "=" ~ expr }
+  // functions
   nl         = _{NEWLINE}
+  function   =  { signature ~ nl ~ scope }
+  numtype    =  { "1"|"2"|"3"|"4" }
+  arg        =  { ident ~ ":" ~ numtype }
+  signature  =  { "fn " ~ ident ~ "(" ~  (arg ~ ("," ~ arg)*)?  ~ ")" ~ "->" ~ numtype }
   scope      =  { nl*~ (assign ~ nl)* ~ expr ~ nl*}
   // expressions
   expr       =   { prefix? ~ primary ~ postfix* ~ (infix ~ prefix? ~ primary ~ postfix* )* }
@@ -34,5 +38,3 @@ program      =   { SOI ~ scope ~ EOI }
       (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) 
     }
     uniform = { "uv" | "time" }
-
-// FUNCTION NAMES CANNOT CONTAIN DIGITS

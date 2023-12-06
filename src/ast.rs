@@ -1,6 +1,6 @@
-use pest::iterators::{Pair, Pairs};
+use pest::iterators::Pair;
 
-use crate::{types::Type, parse::Rule};
+use crate::{types::Type, parse::Rule, error::CompileError};
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~ DEFINE THE ABSTRACT SYNTAX TREE ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -20,13 +20,7 @@ impl AstProperties{
   pub fn new(pair: &Pair<'_, Rule>)->Self{
     Self { own_type: None, source_start: pair.line_col(), source: pair.as_str().to_owned() }
   }
-
-  /// TODO: correct source_start attribute
-  pub fn new_from_pairs(pairs: &Pairs<'_, Rule>)->Self{
-    Self { own_type: None, source_start: (0,0), source: pairs.as_str().to_owned() }
-  }
 }
-
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ATOMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -135,10 +129,33 @@ pub struct Assignment {
 }
 
 #[derive(Debug, Clone)]
-/// AST Node representing a scope, consisting of arbitrarily many assignments followed
-/// by an expression.
-pub struct Scope {
+/// AST Node representing a function, the body of which consists of 
+/// arbitrarily many assignments followed by an expression.
+pub struct Function {
+  pub ident: String,
+  pub arg_identifiers: Vec<String>,
   pub assign: Vec<Assignment>,
   pub expr: Box<Expression>,
   pub properties: AstProperties,
+}
+
+impl Function{
+  /// Get the arguments of a function as a vector of (identifier, type) pairs
+  pub fn get_args_clone(&self)->Result<Vec<(String, Type)>, CompileError>{
+    if let Some(Type::Function { args, returns: _ }) = &self.properties.own_type {
+      Ok(self.arg_identifiers.iter().cloned()
+        .zip(args.iter().cloned())
+        .collect()
+      )
+    } else {
+      Err(CompileError::Type("Internal error: function with type other than 'Function'".to_owned()))
+    }
+  }
+}
+
+#[derive(Debug, Clone)]
+/// AST Node representing the entire program, which is a series of function
+/// definitions.
+pub struct Program {
+  pub functions: Vec<Function>,
 }
