@@ -68,15 +68,12 @@ pub enum InfixBinaryOperator {
 }
 
 #[derive(Debug, Clone)]
-/// AST Node representing a unary operator in prefix notation with no type information.
-pub enum PrefixUnaryOperator {
-  /// The negation of any scalar or vector number type
-  Negate,
-}
-
-#[derive(Debug, Clone)]
 /// AST Node representing a unary operator in postfix notation with no type information.
-pub enum PostfixUnaryOperator{
+pub enum UnaryOperator{
+  // prefix operators
+  Negate,
+
+  // regular operators
   ProjectX,
   ProjectY,
   ProjectZ,
@@ -100,17 +97,12 @@ pub enum Expression {
   Identifier(Identifier),
   Uniform(Uniform),
   Number(Number),
-  PreUnaryOp{
-    op: PrefixUnaryOperator,
+  UnaryOp{
+    op: UnaryOperator,
     val: Box<Expression>,
     properties: AstProperties,
   },
-  PostUnaryOp{
-    op: PostfixUnaryOperator,
-    val: Box<Expression>,
-    properties: AstProperties,
-  },
-  InfixBinaryOp{
+  BinaryOp{
     lhs: Box<Expression>,
     op: InfixBinaryOperator,
     rhs: Box<Expression>,

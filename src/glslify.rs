@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use deunicode::deunicode;
 
-use crate::{ast::Expression, error::CompileError, ast::{Uniform, PrefixUnaryOperator, PostfixUnaryOperator, InfixBinaryOperator, Function, Program}, types::{Type, Dimension}};
+use crate::{ast::Expression, error::CompileError, ast::{Uniform, UnaryOperator, InfixBinaryOperator, Function, Program}, types::{Type, Dimension}};
 
 
 pub trait Glslify{
@@ -32,23 +32,19 @@ impl Glslify for Expression{
         // use pretty print {:?} to make sure at least one decimal place is printed
         Ok(format!("{:?}",num.value))
       },
-      Expression::PreUnaryOp { op, val, properties: _ } => {
+      Expression::UnaryOp { op, val, properties: _ } => {
         match op{
-          PrefixUnaryOperator::Negate => { Ok(format!("(-{})", val.to_glsl()?))},
+          UnaryOperator::Negate => {Ok(format!("(-{})", val.to_glsl()?))},
+          UnaryOperator::ProjectX => {Ok(format!("{}.x", val.to_glsl()?))},
+          UnaryOperator::ProjectY => {Ok(format!("{}.y", val.to_glsl()?))},
+          UnaryOperator::ProjectZ => {Ok(format!("{}.z", val.to_glsl()?))},
+          UnaryOperator::ProjectW => {Ok(format!("{}.w", val.to_glsl()?))},
+          UnaryOperator::Sin => {Ok(format!("sin({})", val.to_glsl()?))},
+          UnaryOperator::Fract => {Ok(format!("fract({})", val.to_glsl()?))},
+          UnaryOperator::Length => {Ok(format!("length({})", val.to_glsl()?))},
         }
       },
-      Expression::PostUnaryOp { op, val, properties: _ } => {
-        match op{
-          PostfixUnaryOperator::ProjectX => {Ok(format!("{}.x", val.to_glsl()?))},
-          PostfixUnaryOperator::ProjectY => {Ok(format!("{}.y", val.to_glsl()?))},
-          PostfixUnaryOperator::ProjectZ => {Ok(format!("{}.z", val.to_glsl()?))},
-          PostfixUnaryOperator::ProjectW => {Ok(format!("{}.w", val.to_glsl()?))},
-          PostfixUnaryOperator::Sin => {Ok(format!("sin({})", val.to_glsl()?))},
-          PostfixUnaryOperator::Fract => {Ok(format!("fract({})", val.to_glsl()?))},
-          PostfixUnaryOperator::Length => {Ok(format!("length({})", val.to_glsl()?))},
-        }
-      },
-      Expression::InfixBinaryOp { lhs, op, rhs, properties: _ } => {
+      Expression::BinaryOp { lhs, op, rhs, properties: _ } => {
         match op{
           InfixBinaryOperator::Add => {Ok(format!("({}+{})", lhs.to_glsl()?, rhs.to_glsl()?))},
           InfixBinaryOperator::Subtract =>{Ok(format!("({}-{})", lhs.to_glsl()?, rhs.to_glsl()?))},

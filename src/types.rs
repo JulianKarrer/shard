@@ -1,4 +1,4 @@
-use crate::{ast::{Uniform, PrefixUnaryOperator, InfixBinaryOperator, PostfixUnaryOperator, Number, Identifier, Expression, Assignment, Function, Program}, CompileError};
+use crate::{ast::{Uniform, InfixBinaryOperator, UnaryOperator, Number, Identifier, Expression, Assignment, Function, Program}, CompileError};
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ WHAT IS A TYPE? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -113,23 +113,23 @@ impl InfersType for Expression{
       Expression::Identifier(ident) => ident.set_own_type(idents),
       Expression::Uniform(unif) => unif.set_own_type(idents),
       Expression::Number(num) => num.set_own_type(idents),
-      Expression::PreUnaryOp { op, val, properties } => {
-        let operand_type = val.set_own_type(idents)?;
-        match op{
-          PrefixUnaryOperator::Negate => {
-            properties.own_type = Some(operand_type.clone());
-            Ok(operand_type)
-          },
-        }
-      },
-      Expression::PostUnaryOp { op, val, properties } => {
+      Expression::UnaryOp { op, val, properties } => {
         let operand = val.set_own_type(idents)?;
         let error = CompileError::throw_type_conflict(properties);
         match op {
+          // prefix operators that return the input type
+          UnaryOperator::Negate => {
+            if let Type::Number(dim) = operand { 
+              let own_type = Type::Number(dim);
+              properties.own_type = Some(own_type.clone());
+              Ok(own_type) 
+            }
+            else { Err(error) }
+          },
           // projection operators always return a one-dimensional number
           // their arguments must have at least n dimensions for the nth operator
           // eg.  .x requires one dimension, .y requires two, .z three and so on
-          PostfixUnaryOperator::ProjectX => {
+          UnaryOperator::ProjectX => {
             if let Type::Number(_) = operand { 
               let own_type = Type::Number(Dimension::One);
               properties.own_type = Some(own_type.clone());
@@ -137,7 +137,7 @@ impl InfersType for Expression{
             }
             else { Err(error) }
           },
-          PostfixUnaryOperator::ProjectY => {
+          UnaryOperator::ProjectY => {
             if let Type::Number(dim) = operand {
               if dim > Dimension::One { 
                 let own_type = Type::Number(Dimension::One);
@@ -147,7 +147,7 @@ impl InfersType for Expression{
             }
             Err(error)
           },
-          PostfixUnaryOperator::ProjectZ => {
+          UnaryOperator::ProjectZ => {
             if let Type::Number(dim) = operand {
               if dim > Dimension::Two { 
                 let own_type = Type::Number(Dimension::One);
@@ -157,7 +157,7 @@ impl InfersType for Expression{
             }
             Err(error)
           },
-          PostfixUnaryOperator::ProjectW => {
+          UnaryOperator::ProjectW => {
             if let Type::Number(dim) = operand {
               if dim > Dimension::Three { 
                 let own_type = Type::Number(Dimension::One);
@@ -169,7 +169,7 @@ impl InfersType for Expression{
           },
           // functions that accept any number type from one to four dimensions and 
           // return a scalar:
-          PostfixUnaryOperator::Length=> {
+          UnaryOperator::Length=> {
             if let Type::Number(_) = operand { 
               let own_type = Type::Number(Dimension::One);
               properties.own_type = Some(own_type.clone());
@@ -179,7 +179,7 @@ impl InfersType for Expression{
           },
           // functions that accept any number type from one to four dimensions and 
           // return the same type:
-          PostfixUnaryOperator::Sin => {
+          UnaryOperator::Sin => {
             if let Type::Number(dim) = operand { 
               let own_type = Type::Number(dim);
               properties.own_type = Some(own_type.clone());
@@ -187,7 +187,7 @@ impl InfersType for Expression{
             }
             else { Err(error) }
           },
-          PostfixUnaryOperator::Fract => {
+          UnaryOperator::Fract => {
             if let Type::Number(dim) = operand { 
               let own_type = Type::Number(dim);
               properties.own_type = Some(own_type.clone());
@@ -197,7 +197,7 @@ impl InfersType for Expression{
           },
         }
       },
-      Expression::InfixBinaryOp { lhs, op, rhs, properties } => {
+      Expression::BinaryOp { lhs, op, rhs, properties } => {
         let lhs = lhs.set_own_type(idents)?;
         let rhs = rhs.set_own_type(idents)?;
         let error = CompileError::throw_type_conflict(properties);
@@ -328,13 +328,10 @@ impl Expression{
         Uniform::Time(prop) => &prop.own_type,
       }},
       Expression::Number(num) => &num.properties.own_type,
-      Expression::PreUnaryOp { op: _, val: _, properties } => {
+      Expression::UnaryOp { op: _, val: _, properties } => {
         &properties.own_type
       },
-      Expression::PostUnaryOp { op: _, val: _, properties } => {
-        &properties.own_type
-      },
-      Expression::InfixBinaryOp { lhs: _, op: _, rhs: _, properties } => {
+      Expression::BinaryOp { lhs: _, op: _, rhs: _, properties } => {
         &properties.own_type
       },
   }

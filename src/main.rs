@@ -21,11 +21,9 @@ const SOURCE: &str = "
 fn sdf(pos:3, eps:1)->1
   pos.length - eps
 
-
-fn main()->1
-  k:= 1
+fn main()->2
   🤩:= uv
-  uv.y.sin * k + 🤩.y
+  -🤩.sin
 ";
 
 fn main(){

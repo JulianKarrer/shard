@@ -2,7 +2,7 @@ use crate::ast::{Number, Identifier, AstProperties, Program};
 use crate::glslify::identifier_utf8_to_ascii;
 use crate::types::{dimension_from_str, Type};
 use crate::{ast, CompileError};
-use ast::{Expression, Uniform, PostfixUnaryOperator, PrefixUnaryOperator, InfixBinaryOperator, Function};
+use ast::{Expression, Uniform, UnaryOperator, InfixBinaryOperator, Function};
 use ast::Assignment;
 use pest::Parser;
 use pest::iterators::Pairs;
@@ -68,21 +68,21 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
   .map_postfix(|lhs, op|{
     let properties = AstProperties::new(&op);
     let operator = match op.as_rule() {
-      Rule::x => Ok(PostfixUnaryOperator::ProjectX),
-      Rule::y => Ok(PostfixUnaryOperator::ProjectY),
-      Rule::z => Ok(PostfixUnaryOperator::ProjectZ),
-      Rule::w => Ok(PostfixUnaryOperator::ProjectW),
-      Rule::sin => Ok(PostfixUnaryOperator::Sin),
-      Rule::fract => Ok(PostfixUnaryOperator::Fract),
-      Rule::length => Ok(PostfixUnaryOperator::Length),
+      Rule::x => Ok(UnaryOperator::ProjectX),
+      Rule::y => Ok(UnaryOperator::ProjectY),
+      Rule::z => Ok(UnaryOperator::ProjectZ),
+      Rule::w => Ok(UnaryOperator::ProjectW),
+      Rule::sin => Ok(UnaryOperator::Sin),
+      Rule::fract => Ok(UnaryOperator::Fract),
+      Rule::length => Ok(UnaryOperator::Length),
       _ => Err(CompileError::throw_parse("unary postfix operator", op))
     };
-    Ok(Expression::PostUnaryOp { op: operator?, val: Box::new(lhs?), properties } )
+    Ok(Expression::UnaryOp { op: operator?, val: Box::new(lhs?), properties } )
   })
   // prefix operators
   .map_prefix(|op, rhs| match op.as_rule(){
-    Rule::neg => Ok(Expression::PreUnaryOp { 
-      op: PrefixUnaryOperator::Negate, 
+    Rule::neg => Ok(Expression::UnaryOp { 
+      op: UnaryOperator::Negate, 
       val: Box::new(rhs?),
       properties: AstProperties::new(&op)
     }),
@@ -98,7 +98,7 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
         Rule::div => Ok(InfixBinaryOperator::Divide),
         _ => Err(CompileError::throw_parse("binary infix operator", op)),
     };
-    Ok(Expression::InfixBinaryOp {
+    Ok(Expression::BinaryOp {
       lhs: Box::new(lhs?),
       op: operator?,
       rhs: Box::new(rhs?),

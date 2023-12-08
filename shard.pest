@@ -5,7 +5,7 @@ program      =   { SOI ~ (nl* ~ function ~nl*)+ ~ EOI }
   utfnum     =  _{ LETTER | SYMBOL }
   ident      =  @{ utfsym ~ (utfnum | utfsym)* }
   // assignments
-  assign     =  { ident ~ "=" ~ expr }
+  assign     =  { ident ~ ":=" ~ expr }
   // functions
   nl         = _{NEWLINE}
   function   =  { signature ~ nl ~ scope }
