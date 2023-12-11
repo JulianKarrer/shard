@@ -40,7 +40,6 @@ pub enum Uniform{
 pub struct Identifier{
   pub name: String,
   pub properties: AstProperties,
-  pub redefined: Option<bool>
 }
 
 
@@ -68,7 +67,7 @@ pub enum InfixBinaryOperator {
 }
 
 #[derive(Debug, Clone)]
-/// AST Node representing a unary operator in postfix notation with no type information.
+/// AST Node representing a unary operator with no type information.
 pub enum UnaryOperator{
   // prefix operators
   Negate,
@@ -81,6 +80,20 @@ pub enum UnaryOperator{
   Sin,
   Fract,
   Length,
+}
+
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ FUNCTION CALLS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+/// AST Node representing a call to a function.
+/// 
+/// Such a call is specified by the function to call and the expressions that make up the
+/// funciton arguments.
+#[derive(Debug, Clone)]
+pub struct FunctionCall{
+  pub function_ident: String,
+  pub args: Vec<Expression>,
+  pub properties: AstProperties,
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPRESSIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -108,6 +121,7 @@ pub enum Expression {
     rhs: Box<Expression>,
     properties: AstProperties,
   },
+  FunctionCall(FunctionCall),
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OTHERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

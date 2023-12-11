@@ -32,6 +32,13 @@ impl Glslify for Expression{
         // use pretty print {:?} to make sure at least one decimal place is printed
         Ok(format!("{:?}",num.value))
       },
+      Expression::FunctionCall(call) => {
+        let mut args_strings = vec![];
+        for val in &call.args{
+          args_strings.push(val.to_glsl()?);
+        }
+        Ok(format!("{}({})", call.function_ident, args_strings.join(",")))
+      },
       Expression::UnaryOp { op, val, properties: _ } => {
         match op{
           UnaryOperator::Negate => {Ok(format!("(-{})", val.to_glsl()?))},

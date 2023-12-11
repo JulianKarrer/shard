@@ -12,13 +12,14 @@ pub enum CompileError{
   Parse(String),
   Type(String),
   Glslify(String),
+  Catastrophic(String)
 }
 
 impl CompileError{
   /// Returns a `ParseError`, filling a predefined template with the expected
   /// construct and properties of the construct found. These include its line
   /// and column in the input, its text and the parser rule it matched against.
-  pub fn throw_parse(expected: &str, found:Pair<'_, Rule>)->Self{
+  pub fn throw_parse(expected: &str, found:&Pair<'_, Rule>)->Self{
     CompileError::Parse(format!(
       "Expected {} at line {}, column {}. Instead found '{}', which is a '{:?}'", 
       expected, found.line_col().0, found.line_col().1, found.as_str(), found.as_rule()
@@ -35,7 +36,18 @@ impl CompileError{
   /// conflicting type
   pub fn throw_type_conflict(content: &AstProperties)->Self{
     CompileError::Type(format!(
-      "Type of '{}' at line {}, colum {} is unexpected.", 
+      "Type of '{}' at line {}, column {} is unexpected.", 
+      content.source, 
+      content.source_start.0, 
+      content.source_start.1
+    ))
+  }
+
+  /// Returns a `TyperError`, filling a predefined template with the content that 
+  /// calls an ambiguous or redefined function
+  pub fn throw_fn_call_ambiguous(content: &AstProperties)->Self{
+    CompileError::Type(format!(
+      "The function call'{}' at line {}, column {} is ambiguous. The function identifier seems to be in use already and redefined later.", 
       content.source, 
       content.source_start.0, 
       content.source_start.1

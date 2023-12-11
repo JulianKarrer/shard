@@ -31,10 +31,11 @@ program      =   { SOI ~ (nl* ~ function ~nl*)+ ~ EOI }
       sin     = { "sin" }
       fract   = { "fract" }
       length  = { "length" }
-    primary  =  _{ num | uniform | ident | "(" ~ expr ~ ")" }
-    num = { float | int }
-    float	= @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+}
-    int    =  @{ 
-      (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) 
-    }
-    uniform = { "uv" | "time" }
+    // atoms of expressions
+    primary   =  _{ "(" ~ expr ~ ")" | num | uniform | call | ident }
+    num       =  { float | int }
+    float	    = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+}
+    int       = @{ (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) }
+    uniform   = @{ "uv" | "time" }
+    // calls
+    call      =  { ident ~ "(" ~  (expr ~ ("," ~ expr)*)?  ~ ")" }

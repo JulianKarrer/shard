@@ -17,13 +17,12 @@ pub fn compile(source: &str)->Result<String, CompileError>{
 }
 
 const SOURCE: &str = "
-
-fn sdf(pos:3, eps:1)->1
+fn sdf(pos:2, eps:1)->1
   pos.length - eps
 
-fn main()->2
-  🤩:= uv
-  -🤩.sin
+fn main()->1
+  🤩 := sdf(uv, 1)
+  uv.y.sin + 🤩
 ";
 
 fn main(){

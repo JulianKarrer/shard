@@ -1,4 +1,4 @@
-use crate::ast::{Number, Identifier, AstProperties, Program};
+use crate::ast::{Number, Identifier, AstProperties, Program, FunctionCall};
 use crate::glslify::identifier_utf8_to_ascii;
 use crate::types::{dimension_from_str, Type};
 use crate::{ast, CompileError};
@@ -33,19 +33,43 @@ lazy_static!(
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE EXPRESSIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+/// Parse a call token, returning a FunctionCall struct, which can be used 
+/// to create an expression AST node.
+fn parse_call(pair: pest::iterators::Pair<'_, Rule>)->Result<FunctionCall, CompileError>{
+  let missing_identifier_error = CompileError::throw_parse("function call identifier", &pair);
+  let properties = AstProperties::new(&pair);
+
+  // the first component of a call token must be the identifier of the function being called
+  let mut pairs = pair.into_inner();
+  let function_ident = identifier_utf8_to_ascii(pairs.next().ok_or(missing_identifier_error)?.as_str());
+  // all other components of the call token are arguments, which are each an expression
+  let mut args = vec![];
+  for component in pairs{
+    match component.as_rule() {
+      Rule::expr => args.push(parse_expr(component.into_inner())?),
+      _ => return Err(CompileError::throw_parse("function call argument", &component)),
+    }
+  }
+  Ok(FunctionCall{ 
+    function_ident, 
+    args, 
+    properties,
+  })
+}
+
 /// Parse an expression token, yielding an AST Node representing an expression
 /// with no type information provided.
 pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
   PRATT_PARSER
   // primaries
-  .map_primary(|primary| 
+  .map_primary(|primary: pest::iterators::Pair<'_, Rule>| 
     match primary.as_rule() {
     Rule::num =>
       Ok(Expression::Number({
         let parsed_value = primary.as_str().parse::<f64>();
         match parsed_value{
           Ok(num) => Ok(Number{ value: num, properties: AstProperties::new(&primary) }),
-          Err(_) => Err(CompileError::throw_parse("number", primary))
+          Err(_) => Err(CompileError::throw_parse("number", &primary))
         }
       }?)), 
     Rule::uniform => {
@@ -53,16 +77,18 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
         match primary.as_str(){
           "uv" => Ok(Uniform::UV(AstProperties::new(&primary))),
           "time" => Ok(Uniform::Time(AstProperties::new(&primary))),
-          _ => Err(CompileError::throw_parse("uniform", primary))
+          _ => Err(CompileError::throw_parse("uniform", &primary))
         }?
       ))
     }, 
     Rule::ident => Ok(Expression::Identifier(Identifier{ 
       name: primary.as_str().to_owned(), 
       properties: AstProperties::new(&primary),
-      redefined: None 
     })),
-    _ => Err(CompileError::throw_parse("atom", primary))
+    Rule::call => {
+      Ok(Expression::FunctionCall(parse_call(primary)?))
+    }
+    _ => Err(CompileError::throw_parse("atom", &primary))
   })
   // postfix operators
   .map_postfix(|lhs, op|{
@@ -75,7 +101,7 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
       Rule::sin => Ok(UnaryOperator::Sin),
       Rule::fract => Ok(UnaryOperator::Fract),
       Rule::length => Ok(UnaryOperator::Length),
-      _ => Err(CompileError::throw_parse("unary postfix operator", op))
+      _ => Err(CompileError::throw_parse("unary postfix operator", &op))
     };
     Ok(Expression::UnaryOp { op: operator?, val: Box::new(lhs?), properties } )
   })
@@ -86,7 +112,7 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
       val: Box::new(rhs?),
       properties: AstProperties::new(&op)
     }),
-    _ => Err(CompileError::throw_parse("unary prefix operator", op)),
+    _ => Err(CompileError::throw_parse("unary prefix operator", &op)),
   })
   // infix operators
   .map_infix(|lhs, op, rhs| {
@@ -96,7 +122,7 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
         Rule::sub => Ok(InfixBinaryOperator::Subtract),
         Rule::mul => Ok(InfixBinaryOperator::Multiply),
         Rule::div => Ok(InfixBinaryOperator::Divide),
-        _ => Err(CompileError::throw_parse("binary infix operator", op)),
+        _ => Err(CompileError::throw_parse("binary infix operator", &op)),
     };
     Ok(Expression::BinaryOp {
       lhs: Box::new(lhs?),
@@ -172,10 +198,10 @@ fn parse_function(mut pairs: Pairs<Rule>) -> Result<Function, CompileError> {
         let properties = AstProperties::new(&pair);
         let mut inner = pair.clone().into_inner();
         let ident = inner.next().ok_or(
-          CompileError::throw_parse("identifier on left side of the assignment", pair.clone())
+          CompileError::throw_parse("identifier on left side of the assignment", &pair.clone())
         )?.as_str().to_owned();
         let val = parse_expr(inner.next().ok_or(
-          CompileError::throw_parse("identifier on right side of the assignment", pair)
+          CompileError::throw_parse("identifier on right side of the assignment", &pair)
           )?.into_inner());
         assignments.push(Assignment { ident, val: Box::new(val?), properties})
       },
@@ -184,13 +210,13 @@ fn parse_function(mut pairs: Pairs<Rule>) -> Result<Function, CompileError> {
           // if more than one expression that is not part of an assignment is found in a scope, 
           // throw a parse error.
           return Err(
-            CompileError::throw_parse("only one expression per function body", pair)
+            CompileError::throw_parse("only one expression per function body", &pair)
           )
         } else {
           expression = Some(Box::new(parse_expr(pair.into_inner())?))
         }
       },
-      _ => return Err(CompileError::throw_parse("an assignment or expression", pair))
+      _ => return Err(CompileError::throw_parse("an assignment or expression", &pair))
     }
   }
   Ok(Function{ 

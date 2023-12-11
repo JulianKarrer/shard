@@ -28,7 +28,7 @@ pub enum Dimension{
 /// of any type, including functions, and returns a number. 
 /// 
 /// A function may not return another function.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type{
   Number(Dimension),
   Function{
@@ -113,6 +113,33 @@ impl InfersType for Expression{
       Expression::Identifier(ident) => ident.set_own_type(idents),
       Expression::Uniform(unif) => unif.set_own_type(idents),
       Expression::Number(num) => num.set_own_type(idents),
+      Expression::FunctionCall(call) => {
+        let error = CompileError::throw_type_conflict(&call.properties);
+        // check if each of the types of the arguments matches the function being called
+        let matching_fn_names = idents.iter()
+          .filter(|(n,_)| *n == call.function_ident)
+          .map(|(_, t)| t)
+          .collect::<Vec<&Type>>();
+        // throw an error if the function called is ambiguous / redefined somewhere
+        if matching_fn_names.len() != 1{return Err(CompileError::throw_fn_call_ambiguous(&call.properties))}
+        let called_fn_type = matching_fn_names
+          .last()
+          .ok_or(error.clone())?
+          .to_owned().to_owned();
+
+        if let Type::Function { args, returns } = called_fn_type{
+          // set types for all argument expressions and check if they match the signature of the called function
+          for (arg_expression, expected_type) in call.args.iter_mut().zip(args){
+            let arg_type = arg_expression.set_own_type(idents)?;
+            if arg_type != expected_type {return Err(error)}
+          }
+          // set the type of the function call to the return type of the called function
+          call.properties.own_type = Some(Type::Number(returns));
+          Ok(Type::Number(returns))
+        } else {
+          Err(error)
+        }
+      }
       Expression::UnaryOp { op, val, properties } => {
         let operand = val.set_own_type(idents)?;
         let error = CompileError::throw_type_conflict(properties);
@@ -334,7 +361,8 @@ impl Expression{
       Expression::BinaryOp { lhs: _, op: _, rhs: _, properties } => {
         &properties.own_type
       },
-  }
+      Expression::FunctionCall(call) => &call.properties.own_type,
+    }
   }
 }
 
@@ -344,8 +372,22 @@ impl Expression{
 /// This replaces all `None` variants with `Some(Type)` in every `AstProperties` struct
 /// of the AST.
 pub fn set_types(program: &mut Program)->Result<(), CompileError>{
+  // function calls use function identifiers, the types of which are already known
+  // from when the functions were parsed. Add these to the list of defined identifiers
+  // that may be used in some function body.
+  let mut function_identifiers:Vec<(String, Type)> = vec![];
+  for f in &program.functions{
+    function_identifiers.push((
+      f.ident.clone(), 
+      f.properties.own_type.clone().ok_or(CompileError::Catastrophic(
+        format!("Function type was not correctly set while parsing for {:?}", f))
+      )?
+    ))
+  };
+    
+  // set all types in the function body and check if the return type matches the signature
   for function in &mut program.functions{
-    function.set_own_type(&mut vec![])?;
+    function.set_own_type(&mut function_identifiers.clone())?;
   }
   Ok(())
 }
