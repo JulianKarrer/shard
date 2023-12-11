@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use crate::ast::{Number, Identifier, AstProperties, Program, FunctionCall};
 use crate::glslify::identifier_utf8_to_ascii;
 use crate::types::{dimension_from_str, Type};
@@ -7,16 +8,20 @@ use ast::Assignment;
 use pest::Parser;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
-use lazy_static::lazy_static;
 // ~~~~~~~~~~~~~~~~~~~~~~~~ DEFINE A PRATT PARSER WITH PRECEDENCES ~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(pest_derive::Parser)]
 #[grammar = "shard.pest"]
 pub struct ShardParser;
+static PRATT_PARSER:OnceLock<PrattParser<Rule>> = OnceLock::new();
 
-lazy_static!(
-  /// A pest.rs pratt parser for creating an abstract syntax tree (AST) from an expression token.
-  static ref PRATT_PARSER: PrattParser<Rule> = {
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE EXPRESSIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+/// Parse an expression token, yielding an AST Node representing an expression
+/// with no type information provided.
+pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
+  PRATT_PARSER.get_or_init(||{
+    /// A pest.rs pratt parser for creating an abstract syntax tree (AST) from an expression token.
     use pest::pratt_parser::{Assoc::*, Op};
     use Rule::*;
     PrattParser::new()
@@ -28,39 +33,7 @@ lazy_static!(
         Op::postfix(x) | Op::postfix(y) | Op::postfix(z) | Op::postfix(w) |
         Op::postfix(sin)|Op::postfix(fract)|Op::postfix(length)
       )
-  };
-);
-
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE EXPRESSIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-/// Parse a call token, returning a FunctionCall struct, which can be used 
-/// to create an expression AST node.
-fn parse_call(pair: pest::iterators::Pair<'_, Rule>)->Result<FunctionCall, CompileError>{
-  let missing_identifier_error = CompileError::throw_parse("function call identifier", &pair);
-  let properties = AstProperties::new(&pair);
-
-  // the first component of a call token must be the identifier of the function being called
-  let mut pairs = pair.into_inner();
-  let function_ident = identifier_utf8_to_ascii(pairs.next().ok_or(missing_identifier_error)?.as_str());
-  // all other components of the call token are arguments, which are each an expression
-  let mut args = vec![];
-  for component in pairs{
-    match component.as_rule() {
-      Rule::expr => args.push(parse_expr(component.into_inner())?),
-      _ => return Err(CompileError::throw_parse("function call argument", &component)),
-    }
-  }
-  Ok(FunctionCall{ 
-    function_ident, 
-    args, 
-    properties,
   })
-}
-
-/// Parse an expression token, yielding an AST Node representing an expression
-/// with no type information provided.
-pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
-  PRATT_PARSER
   // primaries
   .map_primary(|primary: pest::iterators::Pair<'_, Rule>| 
     match primary.as_rule() {
@@ -134,6 +107,30 @@ pub fn parse_expr(pairs: Pairs<Rule>) -> Result<Expression, CompileError> {
   .parse(pairs)
 }
 
+
+/// Parse a call token, returning a FunctionCall struct, which can be used 
+/// to create an expression AST node.
+fn parse_call(pair: pest::iterators::Pair<'_, Rule>)->Result<FunctionCall, CompileError>{
+  let missing_identifier_error = CompileError::throw_parse("function call identifier", &pair);
+  let properties = AstProperties::new(&pair);
+
+  // the first component of a call token must be the identifier of the function being called
+  let mut pairs = pair.into_inner();
+  let function_ident = identifier_utf8_to_ascii(pairs.next().ok_or(missing_identifier_error)?.as_str());
+  // all other components of the call token are arguments, which are each an expression
+  let mut args = vec![];
+  for component in pairs{
+    match component.as_rule() {
+      Rule::expr => args.push(parse_expr(component.into_inner())?),
+      _ => return Err(CompileError::throw_parse("function call argument", &component)),
+    }
+  }
+  Ok(FunctionCall{ 
+    function_ident, 
+    args, 
+    properties,
+  })
+}
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PARSE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
