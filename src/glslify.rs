@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use deunicode::deunicode;
-
 use crate::{ast::Expression, error::CompileError, ast::{Uniform, UnaryOperator, InfixBinaryOperator, Function, Program}, types::{Type, Dimension}};
 
 
@@ -20,12 +18,12 @@ impl Glslify for Expression{
     match self{
       // atoms return strings immediately
       Expression::Identifier(ident) => {
-        Ok(identifier_utf8_to_ascii(&ident.name))
+        Ok(ident.name.to_owned())
       },
       Expression::Uniform(unif) => {
         match unif{
           Uniform::UV(_) => Ok("uv".to_owned()),
-          Uniform::Time(_) => Ok("iTime".to_owned()),
+          Uniform::Time(_) => Ok("time".to_owned()),
         }
       },
       Expression::Number(num) => {
@@ -98,15 +96,7 @@ impl Glslify for Dimension{
   }
 }
 
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OTHERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-/// Convert an UTF-8 identifier to its ASCII representation, transliterating emojis etc.
-/// 
-/// Spaces that might result from the transliteration are converted to underscores, turning
-/// `🤩` into `star_struck` instead of `star struck`.
-pub fn identifier_utf8_to_ascii(ident: &str)->String{
-  deunicode(ident).replace(' ', "_")
-}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 impl Glslify for Function {
   fn to_glsl(&self)->Result<String, CompileError> {
@@ -136,18 +126,18 @@ impl Glslify for Function {
       // assignment must be omitted.
       if defined_identifiers.contains(&assign.ident) {
         result.push_str(&format!(
-          "{} = {};\n", 
-          identifier_utf8_to_ascii(&assign.ident), 
+          "{}={};\n", 
+          &assign.ident, 
           assign.val.to_glsl()?
         ));
       } else {
         defined_identifiers.insert(&assign.ident);
         result.push_str(&format!(
-          "{} {} = {};\n", 
+          "{} {}={};\n", 
           (*assign.val).get_own_type().clone().ok_or(
             CompileError::throw_glslify_error(&assign.properties)
           )?.to_glsl()?,
-          identifier_utf8_to_ascii(&assign.ident), 
+          &assign.ident, 
           assign.val.to_glsl()?
         ));
       }
@@ -156,7 +146,7 @@ impl Glslify for Function {
     // gl_FragColor instead of returning a value
     result.push_str( 
       &if self.ident=="main"{ 
-        format!("gl_FragColor = {};}}",self.expr.to_glsl()?)
+        format!("gl_FragColor={};}}",self.expr.to_glsl()?)
       } else{ 
         format!("return {};}}",self.expr.to_glsl()?)
       }
@@ -166,21 +156,18 @@ impl Glslify for Function {
   }
 }
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PROGRAM ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 impl Glslify for Program{
   fn to_glsl(&self)->Result<String, CompileError> {
     // add the head of the glsl file
-    let mut result = String::from("
-precision highp float; 
-uniform vec2 resolution; 
-uniform float time;
-#define uv 2.0*gl_FragCoord.xy/resolution.xy-1.0
-");
+    let mut result = String::new();
     // add the main body, containing function definitions
-    let mut function_strigs = vec![];
+    let mut function_strings = vec![];
     for function in &self.functions{
-      function_strigs.push(function.to_glsl()?)
+      function_strings.push(function.to_glsl()?)
     }
-    result.push_str(&function_strigs.join("\n"));
+    result.push_str(&function_strings.join("\n"));
 
     Ok(result)
   }

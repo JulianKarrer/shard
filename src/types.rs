@@ -1,4 +1,6 @@
-use crate::{ast::{Uniform, InfixBinaryOperator, UnaryOperator, Number, Identifier, Expression, Assignment, Function, Program}, CompileError};
+use ahash::AHashSet;
+
+use crate::{ast::{Uniform, InfixBinaryOperator, UnaryOperator, Number, Identifier, Expression, Assignment, Function, Program}, CompileError, builtins::{built_ins_signatures, BuiltInFunctions}};
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ WHAT IS A TYPE? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -13,6 +15,13 @@ pub enum Dimension{
   Two,
   Three,
   Four
+}
+
+impl Dimension{
+  /// Computes the maximum dimension of self and other
+  pub fn max(&self, other:Self)->Self{
+    if self >= &other {*self} else {other}
+  }
 }
 
 /// The types of data. This is either a *Number*, which is what 
@@ -233,8 +242,8 @@ impl InfersType for Expression{
           InfixBinaryOperator::Add => {
             if let Type::Number(dim_l) = lhs{
               if let Type::Number(dim_r) = rhs{
-                if dim_l == dim_r {
-                  let own_type = Type::Number(dim_l);
+                if dim_l == dim_r || dim_l==Dimension::One || dim_r == Dimension::One{
+                  let own_type = Type::Number(dim_l.max(dim_r));
                   properties.own_type = Some(own_type.clone());
                   return Ok(own_type) 
                 }
@@ -245,8 +254,8 @@ impl InfersType for Expression{
           InfixBinaryOperator::Subtract => {
             if let Type::Number(dim_l) = lhs{
               if let Type::Number(dim_r) = rhs{
-                if dim_l == dim_r {
-                  let own_type = Type::Number(dim_l);
+                if dim_l == dim_r || dim_l==Dimension::One || dim_r == Dimension::One{
+                  let own_type = Type::Number(dim_l.max(dim_r));
                   properties.own_type = Some(own_type.clone());
                   return Ok(own_type) 
                 }
@@ -259,20 +268,10 @@ impl InfersType for Expression{
           InfixBinaryOperator::Multiply => {
             if let Type::Number(dim_l) = lhs{
               if let Type::Number(dim_r) = rhs{
-                if dim_l == dim_r {return Ok(Type::Number(dim_l))}
-                else {
-                  // scalar multiplication, dim_l != dim_r
-                  // the result has the higher dimensionality amongst dim1 and dim2
-                  if dim_l == Dimension::One { {
-                    let own_type = Type::Number(dim_r);
-                    properties.own_type = Some(own_type.clone());
-                    return Ok(own_type) 
-                  } }
-                  else if dim_r == Dimension::One { {
-                    let own_type = Type::Number(dim_l);
-                    properties.own_type = Some(own_type.clone());
-                    return Ok(own_type) 
-                  } }
+                if dim_l == dim_r || dim_l==Dimension::One || dim_r == Dimension::One{
+                  let own_type = Type::Number(dim_l.max(dim_r));
+                  properties.own_type = Some(own_type.clone());
+                  return Ok(own_type) 
                 }
               }
             }
@@ -371,11 +370,11 @@ impl Expression{
 /// 
 /// This replaces all `None` variants with `Some(Type)` in every `AstProperties` struct
 /// of the AST.
-pub fn set_types(program: &mut Program)->Result<(), CompileError>{
+pub fn set_types(program: &mut Program, built_ins_used: &AHashSet<BuiltInFunctions>)->Result<(), CompileError>{
   // function calls use function identifiers, the types of which are already known
   // from when the functions were parsed. Add these to the list of defined identifiers
   // that may be used in some function body.
-  let mut function_identifiers:Vec<(String, Type)> = vec![];
+  let mut function_identifiers:Vec<(String, Type)> = built_ins_signatures(built_ins_used);
   for f in &program.functions{
     function_identifiers.push((
       f.ident.clone(), 

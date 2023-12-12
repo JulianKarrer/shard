@@ -1,28 +1,15 @@
-use error::CompileError;
-use parse::parse_program;
+use shard::compile;
 
-use crate::{types::set_types, glslify::Glslify};
-
-mod parse;
-mod ast;
-mod types;
-mod error;
-mod glslify;
-
-pub fn compile(source: &str)->Result<String, CompileError>{
-  let mut program =  parse_program(source)?;
-  set_types(&mut program)?;
-  println!("{:#?}", program);
-  program.to_glsl()
-}
 
 const SOURCE: &str = "
-fn sdf(pos:2, eps:1)->1
+fn to_centre(pos:2, eps:1)->1
   pos.length - eps
 
-fn main()->1
-  🤩 := sdf(uv, 1)
-  uv.y.sin + 🤩
+fn main()->4
+  ⭕:= to_centre(uv, 0.3)
+  colour := 3d(⭕*time.sin, (time+3.14159/2).sin, (1-⭕)*time.sin)
+  normalized := colour/2 + 0.5
+  4d(normalized.x, normalized.y, normalized.z, 1) 
 ";
 
 fn main(){

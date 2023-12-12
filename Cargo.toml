@@ -4,9 +4,13 @@ version = "0.1.0"
 authors = ["Julian Karrer"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-deunicode = "1.4.1"
+# parser generator
 pest = "2.7.5"
 pest_derive = "2.7.5"
+
+# replace identifiers with hashes
+ahash = "0.8.6"
+radix_fmt = "1.0.0"
+
+strum = { version = "0.25", features = ["derive"] }

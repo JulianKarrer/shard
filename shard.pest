@@ -1,9 +1,9 @@
 WHITESPACE   =  _{ " " | "\t" }
 program      =   { SOI ~ (nl* ~ function ~nl*)+ ~ EOI }
   // utf-8 identifiers
-  utfsym     =  _{ LETTER | SYMBOL }
-  utfnum     =  _{ LETTER | SYMBOL }
-  ident      =  @{ utfsym ~ (utfnum | utfsym)* }
+  utfsym     =  _{ !(infix|":"|"("|")"|"."|","|"->"|":=") ~ (LETTER | SYMBOL | PUNCTUATION) }
+  utfnum     =  _{ NUMBER }
+  ident      =  @{ "2d" | "3d" | "4d" | (utfsym ~ (utfnum | utfsym)*)  }
   // assignments
   assign     =  { ident ~ ":=" ~ expr }
   // functions
@@ -32,9 +32,9 @@ program      =   { SOI ~ (nl* ~ function ~nl*)+ ~ EOI }
       fract   = { "fract" }
       length  = { "length" }
     // atoms of expressions
-    primary   =  _{ "(" ~ expr ~ ")" | num | uniform | call | ident }
-    num       =  { float | int }
-    float	    = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+}
+    primary   =  _{ "(" ~ expr ~ ")" | call | num | uniform | ident }
+    num       = @{ float | int }
+    float	    = @{ ASCII_DIGIT* ~ "." ~ ASCII_DIGIT+}
     int       = @{ (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) }
     uniform   = @{ "uv" | "time" }
     // calls
