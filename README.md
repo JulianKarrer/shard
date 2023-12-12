@@ -20,8 +20,14 @@ fn main()->4
   4d(normalized.x, normalized.y, normalized.z, 1) 
 ```
 
+which produces:
+<p align="center">
+  <img width="512" height="277" src="./example.gif" alt="rainbow coloured radial gradient.">
+</p>
+
+
 ## Features
-- clean syntax
+- lovely syntax
 - purely functional language with no side effects
 - 🇫🇺🇱🇱 🇺​🇳​🇮​🇨​🇴🇩​🇪 🇸🇺🇵🇵🇴🇷🇹 🤩
 - no mutable data, no recursion, no confusion
@@ -48,8 +54,9 @@ Nice to have:
 - [ ] more uniforms for default runtime (backbuffer, mouse, mp3_fft, ...)
 - [ ] Language Server Protocol implementation
 
+*Shard is in active development and breaking changes are likely.*
 
 ## Implementation
-The transpiler as written in the Rust programming language. 
+The transpiler is written in the Rust programming language. 
 
 The formal grammar can be found in [shard.pest](shard.pest), which is used by [Pest](https://pest.rs/) to generate a Pratt parser.
